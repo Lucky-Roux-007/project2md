@@ -114,4 +114,3 @@ export PATH="$HOME/.local/bin:$PATH"   # add this line to your shell config too
 
 ## License
 
-Add your license of choice here (e.g. MIT).
