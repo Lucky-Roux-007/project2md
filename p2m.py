@@ -28,22 +28,41 @@ from typing import Iterator, Optional
 # ---------------------------------------------------------------------------
 
 SCRIPT_NAME = Path(sys.argv[0]).name
-OUTPUT_FILENAME = "project.md"
+
+
+def output_filename_for(root: Path) -> str:
+    """e.g. project root 'fly-in' -> 'fly-in.md'"""
+    return f"{root.name}.md"
+
 
 # Directories whose contents are never useful to an LLM reading the codebase.
 IGNORE_DIR_NAMES = {
-    ".git", ".hg", ".svn",
-    "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".tox",
-    ".venv", "venv", "env",
-    "node_modules", ".next", ".nuxt",
-    "dist", "build", "target", "out",
-    ".idea", ".vscode",
-    "coverage", "htmlcov",
+    ".git",
+    ".hg",
+    ".svn",
+    "__pycache__",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    ".next",
+    ".nuxt",
+    "dist",
+    "build",
+    "target",
+    "out",
+    ".idea",
+    ".vscode",
+    "coverage",
+    "htmlcov",
 }
 
 # Exact filenames to skip: lock files (huge, low signal), OS cruft.
 IGNORE_FILE_NAMES = {
-    OUTPUT_FILENAME,
     SCRIPT_NAME,
     ".DS_Store",
     "Thumbs.db",
@@ -62,12 +81,46 @@ IGNORE_FILE_PREFIXES = (".env",)
 
 # Extensions with no useful text representation.
 IGNORE_EXTENSIONS = {
-    ".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib", ".exe", ".o", ".obj", ".class", ".jar",
-    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".ico", ".tiff",
-    ".mp3", ".mp4", ".mov", ".avi", ".wav", ".flac",
-    ".ttf", ".otf", ".woff", ".woff2", ".eot",
-    ".pdf", ".zip", ".tar", ".gz", ".rar", ".7z", ".whl",
-    ".db", ".sqlite", ".sqlite3",
+    ".pyc",
+    ".pyo",
+    ".pyd",
+    ".so",
+    ".dll",
+    ".dylib",
+    ".exe",
+    ".o",
+    ".obj",
+    ".class",
+    ".jar",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".webp",
+    ".bmp",
+    ".ico",
+    ".tiff",
+    ".mp3",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".wav",
+    ".flac",
+    ".ttf",
+    ".otf",
+    ".woff",
+    ".woff2",
+    ".eot",
+    ".pdf",
+    ".zip",
+    ".tar",
+    ".gz",
+    ".rar",
+    ".7z",
+    ".whl",
+    ".db",
+    ".sqlite",
+    ".sqlite3",
 }
 
 # Files larger than this are still listed but their content is truncated, so
@@ -75,17 +128,45 @@ IGNORE_EXTENSIONS = {
 MAX_INLINE_BYTES = 200_000
 
 LANGUAGE_BY_EXTENSION = {
-    ".py": "python", ".pyi": "python",
-    ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript",
-    ".ts": "typescript", ".tsx": "typescript",
-    ".java": "java", ".kt": "kotlin", ".go": "go", ".rs": "rust",
-    ".c": "c", ".h": "c", ".cpp": "cpp", ".hpp": "cpp", ".cc": "cpp",
-    ".cs": "csharp", ".rb": "ruby", ".php": "php", ".swift": "swift",
-    ".sh": "bash", ".bash": "bash", ".zsh": "bash", ".bat": "bat", ".ps1": "powershell",
-    ".html": "html", ".css": "css", ".scss": "scss", ".sql": "sql",
-    ".md": "markdown", ".rst": "rst",
-    ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml",
-    ".xml": "xml", ".ini": "ini", ".cfg": "ini", ".txt": "text",
+    ".py": "python",
+    ".pyi": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".java": "java",
+    ".kt": "kotlin",
+    ".go": "go",
+    ".rs": "rust",
+    ".c": "c",
+    ".h": "c",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+    ".cc": "cpp",
+    ".cs": "csharp",
+    ".rb": "ruby",
+    ".php": "php",
+    ".swift": "swift",
+    ".sh": "bash",
+    ".bash": "bash",
+    ".zsh": "bash",
+    ".bat": "bat",
+    ".ps1": "powershell",
+    ".html": "html",
+    ".css": "css",
+    ".scss": "scss",
+    ".sql": "sql",
+    ".md": "markdown",
+    ".rst": "rst",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".toml": "toml",
+    ".xml": "xml",
+    ".ini": "ini",
+    ".cfg": "ini",
+    ".txt": "text",
 }
 
 
@@ -111,8 +192,10 @@ def should_ignore_dir(name: str) -> bool:
     return name in IGNORE_DIR_NAMES or name.endswith(".egg-info")
 
 
-def should_ignore_file(path: Path) -> bool:
+def should_ignore_file(path: Path, output_name: str) -> bool:
     name = path.name
+    if name == output_name:
+        return True
     if name in IGNORE_FILE_NAMES:
         return True
     if name.startswith(IGNORE_FILE_PREFIXES):
@@ -123,9 +206,13 @@ def should_ignore_file(path: Path) -> bool:
 def scan_project(root: Path) -> Node:
     """Recursively build a filtered tree of the project, dirs first then alpha."""
 
+    output_name = output_filename_for(root)
+
     def scan_dir(directory: Path) -> list[Node]:
         try:
-            entries = sorted(directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower()))
+            entries = sorted(
+                directory.iterdir(), key=lambda p: (p.is_file(), p.name.lower())
+            )
         except PermissionError:
             return []
 
@@ -138,7 +225,7 @@ def scan_project(root: Path) -> Node:
                     continue
                 nodes.append(Node(entry, True, scan_dir(entry)))
             elif entry.is_file():
-                if should_ignore_file(entry):
+                if should_ignore_file(entry, output_name):
                     continue
                 nodes.append(Node(entry, False))
         return nodes
@@ -186,7 +273,9 @@ def load_file_content(path: Path) -> FileContent:
     try:
         raw = path.read_bytes()
     except OSError as exc:
-        return FileContent(text=None, error=f"could not read file ({exc.strerror or exc})")
+        return FileContent(
+            text=None, error=f"could not read file ({exc.strerror or exc})"
+        )
 
     if b"\x00" in raw:
         return FileContent(text=None, error="binary file, content omitted")
@@ -217,7 +306,9 @@ def write_file_section(out, root: Path, path: Path) -> None:
     out.write("```\n\n")
 
     if content.truncated:
-        out.write(f"*(truncated — file exceeds {MAX_INLINE_BYTES:,} bytes; showing the first portion only)*\n\n")
+        out.write(
+            f"*(truncated — file exceeds {MAX_INLINE_BYTES:,} bytes; showing the first portion only)*\n\n"
+        )
 
 
 def human_size(num_bytes: int) -> str:
@@ -248,7 +339,9 @@ def generate_project_md(root: Path, output_path: Path) -> ExportStats:
 
     with output_path.open("w", encoding="utf-8") as out:
         out.write(f"# Project Export: {root.name}\n\n")
-        out.write("Generated by p2m.py — a structure and source snapshot formatted for LLM analysis.\n\n")
+        out.write(
+            "Generated by p2m.py — a structure and source snapshot formatted for LLM analysis.\n\n"
+        )
 
         out.write("## Overview\n\n")
         out.write(f"- **Root:** `{root}`\n")
@@ -300,7 +393,7 @@ def resolve_project_root(raw_path: str) -> Path:
 
 def prompt_output_directory(project_root: Path) -> Path:
     """Interactively ask the user where project.md should be saved."""
-    print("\nWhere would you like to save project.md?\n")
+    print(f"\nWhere would you like to save {output_filename_for(project_root)}?\n")
     print("  1) Current project directory")
     print("  2) Home directory ($HOME)")
     print("  3) Custom path")
@@ -316,7 +409,9 @@ def prompt_output_directory(project_root: Path) -> Path:
 
         if choice == "3":
             while True:
-                custom = input("Enter the output directory path (blank to cancel): ").strip()
+                custom = input(
+                    "Enter the output directory path (blank to cancel): "
+                ).strip()
                 if not custom:
                     break  # back to the main menu
                 candidate = Path(custom).expanduser().resolve()
@@ -348,9 +443,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print("\nCancelled.")
         return 130
 
-    output_path = output_dir / OUTPUT_FILENAME
+    output_path = output_dir / output_filename_for(project_root)
 
-    print("\nScanning project and writing project.md...")
+    print(f"\nScanning project and writing {output_filename_for(project_root)}...")
     try:
         stats = generate_project_md(project_root, output_path)
     except PermissionError:
@@ -360,7 +455,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         print(f"Error: could not write to {output_path}: {exc}", file=sys.stderr)
         return 1
 
-    print(f"✓ Exported {stats.file_count} files ({human_size(stats.total_bytes)}) to {output_path}")
+    print(
+        f"✓ Exported {stats.file_count} files ({human_size(stats.total_bytes)}) to {output_path}"
+    )
     return 0
 
 
